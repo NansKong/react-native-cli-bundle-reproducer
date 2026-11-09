@@ -1,79 +1,51 @@
-# react-native-cli-bundle-reproducer
+# CLI bug reproductions
 
-![Build](https://github.com/NansKong/react-native-cli-bundle-reproducer/workflows/Pre%20Merge%20Checks/badge.svg)
+This project uses the official [React Native reproducer template](https://github.com/react-native-community/reproducer-react-native), with React Native 0.88.1. The native Android/iOS projects and the application entry point are preserved. These two failures happen during bundling, so neither an emulator nor a native SDK is needed to reproduce them.
 
-This is your new React Native Reproducer project.
+## Setup
 
-# Reproducer TODO list
+Use Node 22.13 or newer supported by React Native 0.88.1:
 
-- [x] 1. Create a new reproducer project.
-- [ ] 2. Git clone your repository locally.
-- [ ] 3. Edit the project to reproduce the failure you're seeing.
-- [ ] 4. Push your changes, so that Github Actions can run the CI.
-- [ ] 5. Make sure the repository is public and share the link with the issue you reported.
-
-# How to use this Reproducer
-
-This project has been created with `npx @react-native-community/cli init` and is a vanilla React Native app.
-
-> [!IMPORTANT]  
-> Make sure you have completed the [React Native - Environment Setup](https://reactnative.dev/docs/set-up-your-environment) so that you have a working environment locally.
-
-## Step 1: Start the Metro Server
-
-First, you will need to start **Metro**, the JavaScript _bundler_ that ships _with_ React Native.
-
-To start Metro, run the following command from the _root_ of your React Native project:
-
-```bash
-# using npm
-npm start
-
-# OR using Yarn
-yarn start
+```sh
+cd ReproducerApp
+npm install
 ```
 
-## Step 2: Start your Application
+## Missing asset catalog: react/react-native#59871
 
-Let Metro Bundler run in its _own_ terminal. Open a _new_ terminal from the _root_ of your React Native project. Run the following command to start your _Android_ or _iOS_ app:
-
-### For Android
-
-```bash
-# using npm
-npm run android
-
-# OR using Yarn
-yarn android
+```sh
+node reproduce-cli.cjs catalog
 ```
 
-### For iOS
+Expected: a bundle command targeting a missing `RNAssets.xcassets` rejects with a nonzero exit status.
 
-First, make sure you install dependencies with:
+Actual: the ordinary bundle control copies its GIF. The command with `--asset-catalog-dest` logs the missing-catalog error, exits 0, and copies no GIF.
 
-```bash
-cd ios && bundle install && bundle exec pod install
+## Ignored output options: react/react-native#59873
+
+```sh
+node reproduce-cli.cjs options
 ```
 
-Then you can run the iOS app with:
+Expected: `--bundle-encoding utf16le` produces UTF-16LE bytes and `--sourcemap-sources-root` makes source paths relative to the supplied root.
 
-```bash
-# using npm
-npm run ios
+Actual: the requested UTF-16LE bundle is byte-identical to the default UTF-8 bundle, and the map still names the absolute entry path.
 
-# OR using Yarn
-yarn ios
+## How the checks work
+
+Both checks invoke the public `react-native bundle` CLI through `react-native/cli.js`, use the template's real Metro configuration and installed React Native dependencies, and build actual bundles. No internal CLI helpers or mocks are used. Each run generates its own entry and one-pixel GIF inside a fresh `ReproducerApp/build/repro-*` directory, which is already ignored by the template. Existing application files are not modified.
+
+Each script exits 0 only after verifying the current bug and its control; a CLI failure before that point or behavior different from the reported bug makes it exit nonzero. These are reproduction checks, so 0 means “the bug was reproduced,” not “the product is fixed.” Read the `REPRODUCED` line and the inner CLI output.
+
+Only the bundling steps are tested. No native-device behavior is claimed.
+
+## Verified results
+
+Tested on Windows 11, Node v22.22.0, npm 11.18.0, React Native 0.88.1, community CLI 20.2.0, and Metro 0.87.2:
+
+```text
+REPRODUCED #59871: control copied the GIF; missing catalog logged an error but CLI exited 0 and copied no GIF.
+REPRODUCED #59873: default and requested UTF-16LE bundles are byte-identical UTF-8; source-map entry is still absolute.
 ```
 
-If everything is set up _correctly_, you should see your new app running in your _Android Emulator_ or _iOS Simulator_ shortly provided you have set up your emulator/simulator correctly.
-
-This is one way to run your app — you can also run it directly from within Android Studio and Xcode respectively.
-
-## Step 3: Modifying your App
-
-Now that you have successfully run the app, let's modify it.
-
-1. Open `App.tsx` in your text editor of choice and edit some lines.
-2. For **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Developer Menu** (<kbd>Ctrl</kbd> + <kbd>M</kbd> (on Window and Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (on macOS)) to see your changes!
-
-   For **iOS**: Hit <kbd>Cmd ⌘</kbd> + <kbd>R</kbd> in your iOS Simulator to reload the app and see your changes!
+The template's Android/iOS builds were not run; the CLI reproductions do not require them.
